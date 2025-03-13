@@ -1,3 +1,6 @@
+// 1. use the cd
+// 2. npm run deploy to send to githubpage
+// 2.1 or npm start to go for a local serv version
 import React, { useState, useEffect } from "react";
 import './BenchmarkAnalyzer.css';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -17,9 +20,13 @@ const BenchmarkAnalyzer = () => {
   const parseLogFile = (logContent) => {
     const benchmarks = [];
     const stutterPattern = /\[(.+?)\] !!! STUTTER !!! ([\d.]+) FPS/g;
-    const benchmarkPattern = /\[.+?\] (.+?)_(\d+) - Samples: (\d+), Duration: ([\d.]+)s\s+MEAN: ([\d.]+)\s+Median: ([\d.]+), Min: ([\d.]+), Max: ([\d.]+)\s+Frames < 60 FPS: (\d+) \(([\d.]+)%\)\s+Frames < 45 FPS: (\d+) \(([\d.]+)%\)\s+Frames < 30 FPS: (\d+) \(([\d.]+)%\)\s+Frames < 15 FPS: (\d+) \(([\d.]+)%\)/g;
+    const benchmarkPattern = /\[.+?\] (.+?)_(\d+) - Samples: (\d+), Duration: ([\d.]+)s\s+=== FPS STATISTICS ===\s+Mean: ([\d.]+), Median: ([\d.]+), Min: ([\d.]+), Max: ([\d.]+)\s+Frames < 60 FPS: (\d+) \(([\d.]+)%\)\s+Frames < 45 FPS: (\d+) \(([\d.]+)%\)\s+Frames < 30 FPS: (\d+) \(([\d.]+)%\)\s+Frames < 15 FPS: (\d+) \(([\d.]+)%\)\s+=== GAME THREAD \(ms\) ===\s+Mean: ([\d.]+), Median: ([\d.]+), Min: ([\d.]+), Max: ([\d.]+)\s+=== RENDER THREAD \(ms\) ===\s+Mean: ([\d.]+), Median: ([\d.]+), Min: ([\d.]+), Max: ([\d.]+)\s+=== GPU TIME \(ms\) ===\s+Mean: ([\d.]+), Median: ([\d.]+), Min: ([\d.]+), Max: ([\d.]+)/g;
+    
+    // Fallback to old pattern if the new one doesn't match
+    const oldBenchmarkPattern = /\[.+?\] (.+?)_(\d+) - Samples: (\d+), Duration: ([\d.]+)s\s+MEAN: ([\d.]+)\s+Median: ([\d.]+), Min: ([\d.]+), Max: ([\d.]+)\s+Frames < 60 FPS: (\d+) \(([\d.]+)%\)\s+Frames < 45 FPS: (\d+) \(([\d.]+)%\)\s+Frames < 30 FPS: (\d+) \(([\d.]+)%\)\s+Frames < 15 FPS: (\d+) \(([\d.]+)%\)/g;
     
     let match;
+    // Try the new pattern first
     while ((match = benchmarkPattern.exec(logContent)) !== null) {
       benchmarks.push({
         scene: match[1],
@@ -37,8 +44,45 @@ const BenchmarkAnalyzer = () => {
         frames_below_30: parseInt(match[13]),
         percent_below_30: parseFloat(match[14]),
         frames_below_15: parseInt(match[15]),
-        percent_below_15: parseFloat(match[16])
+        percent_below_15: parseFloat(match[16]),
+        game_thread_mean: parseFloat(match[17]),
+        game_thread_median: parseFloat(match[18]),
+        game_thread_min: parseFloat(match[19]),
+        game_thread_max: parseFloat(match[20]),
+        render_thread_mean: parseFloat(match[21]),
+        render_thread_median: parseFloat(match[22]),
+        render_thread_min: parseFloat(match[23]),
+        render_thread_max: parseFloat(match[24]),
+        gpu_time_mean: parseFloat(match[25]),
+        gpu_time_median: parseFloat(match[26]),
+        gpu_time_min: parseFloat(match[27]),
+        gpu_time_max: parseFloat(match[28])
       });
+    }
+    
+    // If no benchmarks found, try the old pattern
+    if (benchmarks.length === 0) {
+      let oldMatch;
+      while ((oldMatch = oldBenchmarkPattern.exec(logContent)) !== null) {
+        benchmarks.push({
+          scene: oldMatch[1],
+          run: parseInt(oldMatch[2]),
+          samples: parseInt(oldMatch[3]),
+          duration: parseFloat(oldMatch[4]),
+          mean: parseFloat(oldMatch[5]),
+          median: parseFloat(oldMatch[6]),
+          min: parseFloat(oldMatch[7]),
+          max: parseFloat(oldMatch[8]),
+          frames_below_60: parseInt(oldMatch[9]),
+          percent_below_60: parseFloat(oldMatch[10]),
+          frames_below_45: parseInt(oldMatch[11]),
+          percent_below_45: parseFloat(oldMatch[12]),
+          frames_below_30: parseInt(oldMatch[13]),
+          percent_below_30: parseFloat(oldMatch[14]),
+          frames_below_15: parseInt(oldMatch[15]),
+          percent_below_15: parseFloat(oldMatch[16])
+        });
+      }
     }
     
     const stutters = [];
@@ -74,7 +118,19 @@ const BenchmarkAnalyzer = () => {
         below45: benchmark.percent_below_45,
         below30: benchmark.percent_below_30,
         below15: benchmark.percent_below_15,
-        samples: benchmark.samples
+        samples: benchmark.samples,
+        gameThreadMean: benchmark.game_thread_mean,
+        gameThreadMedian: benchmark.game_thread_median,
+        gameThreadMin: benchmark.game_thread_min,
+        gameThreadMax: benchmark.game_thread_max,
+        renderThreadMean: benchmark.render_thread_mean,
+        renderThreadMedian: benchmark.render_thread_median,
+        renderThreadMin: benchmark.render_thread_min,
+        renderThreadMax: benchmark.render_thread_max,
+        gpuTimeMean: benchmark.gpu_time_mean,
+        gpuTimeMedian: benchmark.gpu_time_median,
+        gpuTimeMin: benchmark.gpu_time_min,
+        gpuTimeMax: benchmark.gpu_time_max
       });
     });
     
@@ -96,6 +152,34 @@ const BenchmarkAnalyzer = () => {
       const minMeanFPS = Math.min(...runs.map(run => run.mean));
       const maxMeanFPS = Math.max(...runs.map(run => run.mean));
       
+      // Calculate thread time and GPU time averages
+      const hasThreadData = runs.some(run => run.gameThreadMean !== undefined);
+      
+      let gameThreadMean = 0;
+      let minGameThreadMean = 0;
+      let maxGameThreadMean = 0;
+      let renderThreadMean = 0;
+      let minRenderThreadMean = 0;
+      let maxRenderThreadMean = 0;
+      let gpuTimeMean = 0;
+      let minGpuTimeMean = 0;
+      let maxGpuTimeMean = 0;
+      
+      if (hasThreadData) {
+        // Calculate weighted average for thread times
+        gameThreadMean = runs.reduce((sum, run) => sum + ((run.gameThreadMean || 0) * (run.samples || 1)), 0) / totalSamples;
+        minGameThreadMean = Math.min(...runs.map(run => run.gameThreadMean || Number.MAX_VALUE));
+        maxGameThreadMean = Math.max(...runs.map(run => run.gameThreadMean || 0));
+        
+        renderThreadMean = runs.reduce((sum, run) => sum + ((run.renderThreadMean || 0) * (run.samples || 1)), 0) / totalSamples;
+        minRenderThreadMean = Math.min(...runs.map(run => run.renderThreadMean || Number.MAX_VALUE));
+        maxRenderThreadMean = Math.max(...runs.map(run => run.renderThreadMean || 0));
+        
+        gpuTimeMean = runs.reduce((sum, run) => sum + ((run.gpuTimeMean || 0) * (run.samples || 1)), 0) / totalSamples;
+        minGpuTimeMean = Math.min(...runs.map(run => run.gpuTimeMean || Number.MAX_VALUE));
+        maxGpuTimeMean = Math.max(...runs.map(run => run.gpuTimeMean || 0));
+      }
+      
       return {
         name: scene,
         meanFPS: weightedMean,
@@ -104,11 +188,21 @@ const BenchmarkAnalyzer = () => {
         maxFPS: Math.max(...runs.map(run => run.max)),
         minMeanFPS: minMeanFPS,
         maxMeanFPS: maxMeanFPS,
+        gameThreadMean: gameThreadMean,
+        minGameThreadMean: minGameThreadMean === Number.MAX_VALUE ? 0 : minGameThreadMean,
+        maxGameThreadMean: maxGameThreadMean,
+        renderThreadMean: renderThreadMean,
+        minRenderThreadMean: minRenderThreadMean === Number.MAX_VALUE ? 0 : minRenderThreadMean,
+        maxRenderThreadMean: maxRenderThreadMean,
+        gpuTimeMean: gpuTimeMean,
+        minGpuTimeMean: minGpuTimeMean === Number.MAX_VALUE ? 0 : minGpuTimeMean,
+        maxGpuTimeMean: maxGpuTimeMean,
         below60: runs.reduce((sum, run) => sum + (run.below60 * (run.samples || 1)), 0) / totalSamples,
         below45: runs.reduce((sum, run) => sum + (run.below45 * (run.samples || 1)), 0) / totalSamples,
         below30: runs.reduce((sum, run) => sum + (run.below30 * (run.samples || 1)), 0) / totalSamples,
         below15: runs.reduce((sum, run) => sum + (run.below15 * (run.samples || 1)), 0) / totalSamples,
-        totalSamples: totalSamples
+        totalSamples: totalSamples,
+        hasThreadData: hasThreadData
       };
     });
     
@@ -165,19 +259,104 @@ const BenchmarkAnalyzer = () => {
     // Sample evolution data structure
     const evolution = {
       "Blockade1": [
-        { run: 0, mean: 71.93, median: 74.01, min: 9.61, max: 96.84, below60: 11.4, below45: 2.3, below30: 1.0, below15: 0.9, samples: 983 },
-        { run: 1, mean: 51.48, median: 51.91, min: 12.03, max: 62.07, below60: 99.0, below45: 6.3, below30: 0.4, below15: 0.4, samples: 735 },
-        { run: 2, mean: 51.52, median: 51.97, min: 12.49, max: 65.79, below60: 98.9, below45: 5.6, below30: 0.4, below15: 0.4, samples: 737 },
+        { 
+          run: 0, 
+          mean: 65.13, 
+          median: 64.53, 
+          min: 14.13, 
+          max: 100.62, 
+          below60: 29.2, 
+          below45: 3.8, 
+          below30: 1.7, 
+          below15: 0.2, 
+          samples: 895,
+          gameThreadMean: 11.90,
+          gameThreadMedian: 11.44,
+          gameThreadMin: 8.28,
+          gameThreadMax: 23.70,
+          renderThreadMean: 5.20,
+          renderThreadMedian: 4.82,
+          renderThreadMin: 3.68,
+          renderThreadMax: 40.06,
+          gpuTimeMean: 14.12,
+          gpuTimeMedian: 13.85,
+          gpuTimeMin: 10.05,
+          gpuTimeMax: 32.24
+        },
+        { 
+          run: 1, 
+          mean: 51.48, 
+          median: 51.91, 
+          min: 12.03, 
+          max: 62.07, 
+          below60: 99.0, 
+          below45: 6.3, 
+          below30: 0.4, 
+          below15: 0.4, 
+          samples: 735,
+          gameThreadMean: 12.80,
+          gameThreadMedian: 12.10,
+          gameThreadMin: 8.50,
+          gameThreadMax: 25.30,
+          renderThreadMean: 5.60,
+          renderThreadMedian: 5.12,
+          renderThreadMin: 3.95,
+          renderThreadMax: 42.15,
+          gpuTimeMean: 15.20,
+          gpuTimeMedian: 14.75,
+          gpuTimeMin: 10.85,
+          gpuTimeMax: 34.50
+        }
       ],
       "Slump": [
-        { run: 0, mean: 75.96, median: 77.61, min: 12.49, max: 94.47, below60: 1.5, below45: 0.7, below30: 0.2, below15: 0.2, samples: 1084 },
-        { run: 1, mean: 54.27, median: 54.27, min: 13.62, max: 62.18, below60: 98.0, below45: 0.6, below30: 0.1, below15: 0.1, samples: 783 },
-        { run: 2, mean: 53.14, median: 53.24, min: 12.50, max: 76.97, below60: 96.6, below45: 3.2, below30: 0.5, below15: 0.5, samples: 758 }
-      ],
-      "BusStation": [
-        { run: 0, mean: 84.20, median: 85.18, min: 12.91, max: 108.22, below60: 1.0, below45: 0.6, below30: 0.1, below15: 0.1, samples: 1198 },
-        { run: 1, mean: 53.45, median: 53.70, min: 12.98, max: 76.36, below60: 99.1, below45: 1.8, below30: 0.7, below15: 0.5, samples: 763 },
-        { run: 2, mean: 52.04, median: 51.44, min: 12.45, max: 79.55, below60: 81.2, below45: 13.8, below30: 1.9, below15: 1.3, samples: 718 }
+        { 
+          run: 0, 
+          mean: 77.79, 
+          median: 80.49, 
+          min: 17.24, 
+          max: 114.48, 
+          below60: 9.3, 
+          below45: 2.1, 
+          below30: 0.8, 
+          below15: 0.0, 
+          samples: 1077,
+          gameThreadMean: 8.66,
+          gameThreadMedian: 8.62,
+          gameThreadMin: 6.86,
+          gameThreadMax: 15.63,
+          renderThreadMean: 4.37,
+          renderThreadMedian: 4.12,
+          renderThreadMin: 3.67,
+          renderThreadMax: 15.84,
+          gpuTimeMean: 11.80,
+          gpuTimeMedian: 11.06,
+          gpuTimeMin: 8.87,
+          gpuTimeMax: 38.35
+        },
+        { 
+          run: 1, 
+          mean: 54.27, 
+          median: 54.27, 
+          min: 13.62, 
+          max: 62.18, 
+          below60: 98.0, 
+          below45: 0.6, 
+          below30: 0.1, 
+          below15: 0.1, 
+          samples: 783,
+          gameThreadMean: 9.20,
+          gameThreadMedian: 9.05,
+          gameThreadMin: 7.12,
+          gameThreadMax: 17.25,
+          renderThreadMean: 4.75,
+          renderThreadMedian: 4.45,
+          renderThreadMin: 3.80,
+          renderThreadMax: 16.75,
+          gpuTimeMean: 12.50,
+          gpuTimeMedian: 11.85,
+          gpuTimeMin: 9.10,
+          gpuTimeMax: 40.20
+        }
       ]
     };
 
@@ -193,6 +372,19 @@ const BenchmarkAnalyzer = () => {
       const minMeanFPS = Math.min(...runs.map(run => run.mean));
       const maxMeanFPS = Math.max(...runs.map(run => run.mean));
       
+      // Calculate thread time and GPU time averages
+      const gameThreadMean = runs.reduce((sum, run) => sum + (run.gameThreadMean * run.samples), 0) / totalSamples;
+      const minGameThreadMean = Math.min(...runs.map(run => run.gameThreadMean));
+      const maxGameThreadMean = Math.max(...runs.map(run => run.gameThreadMean));
+      
+      const renderThreadMean = runs.reduce((sum, run) => sum + (run.renderThreadMean * run.samples), 0) / totalSamples;
+      const minRenderThreadMean = Math.min(...runs.map(run => run.renderThreadMean));
+      const maxRenderThreadMean = Math.max(...runs.map(run => run.renderThreadMean));
+      
+      const gpuTimeMean = runs.reduce((sum, run) => sum + (run.gpuTimeMean * run.samples), 0) / totalSamples;
+      const minGpuTimeMean = Math.min(...runs.map(run => run.gpuTimeMean));
+      const maxGpuTimeMean = Math.max(...runs.map(run => run.gpuTimeMean));
+      
       return {
         name: scene,
         meanFPS: weightedMean,
@@ -201,19 +393,29 @@ const BenchmarkAnalyzer = () => {
         maxFPS: Math.max(...runs.map(run => run.max)),
         minMeanFPS: minMeanFPS,
         maxMeanFPS: maxMeanFPS,
+        gameThreadMean: gameThreadMean,
+        minGameThreadMean: minGameThreadMean,
+        maxGameThreadMean: maxGameThreadMean,
+        renderThreadMean: renderThreadMean,
+        minRenderThreadMean: minRenderThreadMean,
+        maxRenderThreadMean: maxRenderThreadMean,
+        gpuTimeMean: gpuTimeMean,
+        minGpuTimeMean: minGpuTimeMean,
+        maxGpuTimeMean: maxGpuTimeMean,
         below60: runs.reduce((sum, run) => sum + (run.below60 * run.samples), 0) / totalSamples,
         below45: runs.reduce((sum, run) => sum + (run.below45 * run.samples), 0) / totalSamples,
         below30: runs.reduce((sum, run) => sum + (run.below30 * run.samples), 0) / totalSamples,
         below15: runs.reduce((sum, run) => sum + (run.below15 * run.samples), 0) / totalSamples,
-        totalSamples: totalSamples
+        totalSamples: totalSamples,
+        hasThreadData: true
       };
     });
     
     // Sample stutter events
     const stutters = [
-      { timestamp: "52", fps: 9.91 },
-      { timestamp: "73", fps: 9.61 },
-      { timestamp: "88", fps: 9.65 }
+      { timestamp: "2025-03-10 18:32:15", fps: 9.91 },
+      { timestamp: "2025-03-10 18:32:31", fps: 9.61 },
+      { timestamp: "2025-03-10 18:33:51", fps: 9.65 }
     ];
     
     return { evolution, averages, stutters };
@@ -266,6 +468,20 @@ const BenchmarkAnalyzer = () => {
         max: run.max
       })) : [];
     }
+  };
+  
+  // Prepare data for thread time comparison chart when all scenes are selected
+  const prepareThreadComparisonData = () => {
+    if (!sceneAverages || sceneAverages.length === 0 || !sceneAverages[0].hasThreadData) {
+      return [];
+    }
+    
+    return sceneAverages.map(scene => ({
+      name: scene.name,
+      gameThread: scene.gameThreadMean || 0,
+      renderThread: scene.renderThreadMean || 0, 
+      gpuTime: scene.gpuTimeMean || 0
+    }));
   };
   
   // Load sample data on mount
@@ -407,6 +623,113 @@ const BenchmarkAnalyzer = () => {
             </div>
           </div>
           
+          {/* Thread Time Comparison Chart for all scenes */}
+          {selectedScene === 'all' && sceneAverages.some(scene => scene.hasThreadData) && (
+            <div className="section mt-4">
+              <h2 className="subtitle">Thread Time Comparison Across Scenes (ms)</h2>
+              <div className="chart-container" style={{ height: '450px', marginBottom: '40px' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart 
+                    data={prepareThreadComparisonData()}
+                    margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend wrapperStyle={{ position: 'relative', marginTop: '10px' }} />
+                    <Bar dataKey="gameThread" name="Game Thread" fill="#8884d8" />
+                    <Bar dataKey="renderThread" name="Render Thread" fill="#82ca9d" />
+                    <Bar dataKey="gpuTime" name="GPU Time" fill="#ff7300" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+          
+          {/* Additional Performance Metrics if present */}
+          {selectedScene !== 'all' && evolutionData[selectedScene] && evolutionData[selectedScene][0].gameThreadMean !== undefined && (
+            <div className="section">
+              <h2 className="subtitle">Performance Metrics for {selectedScene}</h2>
+              <div className="metrics-grid">
+                <div className="metric-card">
+                  <h3 className="metric-title">Game Thread Time (ms)</h3>
+                  <div className="chart-container">
+                    <ResponsiveContainer width="100%" height="300">
+                      <LineChart data={evolutionData[selectedScene].map(run => ({
+                        run: `Run ${run.run}`,
+                        mean: run.gameThreadMean,
+                        median: run.gameThreadMedian,
+                        min: run.gameThreadMin,
+                        max: run.gameThreadMax
+                      }))}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="run" />
+                        <YAxis domain={[0, 'dataMax + 5']} />
+                        <Tooltip />
+                        <Legend />
+                        <Line type="monotone" dataKey="mean" name="Mean Time" stroke="#8884d8" />
+                        <Line type="monotone" dataKey="median" name="Median Time" stroke="#82ca9d" />
+                        <Line type="monotone" dataKey="min" name="Min Time" stroke="#82ca9d" strokeDasharray="5 5" />
+                        <Line type="monotone" dataKey="max" name="Max Time" stroke="#ff7300" strokeDasharray="3 3" />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+                
+                <div className="metric-card">
+                  <h3 className="metric-title">Render Thread Time (ms)</h3>
+                  <div className="chart-container">
+                    <ResponsiveContainer width="100%" height="300">
+                      <LineChart data={evolutionData[selectedScene].map(run => ({
+                        run: `Run ${run.run}`,
+                        mean: run.renderThreadMean,
+                        median: run.renderThreadMedian,
+                        min: run.renderThreadMin,
+                        max: run.renderThreadMax
+                      }))}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="run" />
+                        <YAxis domain={[0, 'dataMax + 5']} />
+                        <Tooltip />
+                        <Legend />
+                        <Line type="monotone" dataKey="mean" name="Mean Time" stroke="#8884d8" />
+                        <Line type="monotone" dataKey="median" name="Median Time" stroke="#82ca9d" />
+                        <Line type="monotone" dataKey="min" name="Min Time" stroke="#82ca9d" strokeDasharray="5 5" />
+                        <Line type="monotone" dataKey="max" name="Max Time" stroke="#ff7300" strokeDasharray="3 3" />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+                
+                <div className="metric-card">
+                  <h3 className="metric-title">GPU Time (ms)</h3>
+                  <div className="chart-container">
+                    <ResponsiveContainer width="100%" height="300">
+                      <LineChart data={evolutionData[selectedScene].map(run => ({
+                        run: `Run ${run.run}`,
+                        mean: run.gpuTimeMean,
+                        median: run.gpuTimeMedian,
+                        min: run.gpuTimeMin,
+                        max: run.gpuTimeMax
+                      }))}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="run" />
+                        <YAxis domain={[0, 'dataMax + 5']} />
+                        <Tooltip />
+                        <Legend />
+                        <Line type="monotone" dataKey="mean" name="Mean Time" stroke="#8884d8" />
+                        <Line type="monotone" dataKey="median" name="Median Time" stroke="#82ca9d" />
+                        <Line type="monotone" dataKey="min" name="Min Time" stroke="#82ca9d" strokeDasharray="5 5" />
+                        <Line type="monotone" dataKey="max" name="Max Time" stroke="#ff7300" strokeDasharray="3 3" />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          
           {/* Evolution Tables */}
           <div className="section">
             <h2 className="subtitle">Performance Metrics Across Runs</h2>
@@ -499,19 +822,79 @@ const BenchmarkAnalyzer = () => {
           </div>
           
           <div className="section">
-            <h2 className="subtitle">Mean FPS Range by Scene</h2>
-            <div className="chart-container">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={sceneAverages}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="minMeanFPS" name="Min Mean FPS" fill="#ff7300" />
-                  <Bar dataKey="maxMeanFPS" name="Max Mean FPS" fill="#0088FE" />
-                </BarChart>
-              </ResponsiveContainer>
+            <h2 className="subtitle">Performance Metrics by Scene</h2>
+            <div className="metrics-grid">
+              <div className="metric-card">
+                <h3 className="metric-title">Mean FPS Range</h3>
+                <div className="chart-container">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={sceneAverages}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" />
+                      <YAxis />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="minMeanFPS" name="Min Mean FPS" fill="#ff7300" />
+                      <Bar dataKey="maxMeanFPS" name="Max Mean FPS" fill="#0088FE" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+              
+              {sceneAverages.some(scene => scene.hasThreadData) && (
+                <>
+                  <div className="metric-card">
+                    <h3 className="metric-title">Game Thread Time (ms)</h3>
+                    <div className="chart-container">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={sceneAverages}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="name" />
+                          <YAxis />
+                          <Tooltip />
+                          <Legend />
+                          <Bar dataKey="minGameThreadMean" name="Min Game Thread" fill="#82ca9d" />
+                          <Bar dataKey="maxGameThreadMean" name="Max Game Thread" fill="#8884d8" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                  
+                  <div className="metric-card">
+                    <h3 className="metric-title">Render Thread Time (ms)</h3>
+                    <div className="chart-container">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={sceneAverages}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="name" />
+                          <YAxis />
+                          <Tooltip />
+                          <Legend />
+                          <Bar dataKey="minRenderThreadMean" name="Min Render Thread" fill="#82ca9d" />
+                          <Bar dataKey="maxRenderThreadMean" name="Max Render Thread" fill="#8884d8" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                  
+                  <div className="metric-card">
+                    <h3 className="metric-title">GPU Time (ms)</h3>
+                    <div className="chart-container">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={sceneAverages}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="name" />
+                          <YAxis />
+                          <Tooltip />
+                          <Legend />
+                          <Bar dataKey="minGpuTimeMean" name="Min GPU Time" fill="#82ca9d" />
+                          <Bar dataKey="maxGpuTimeMean" name="Max GPU Time" fill="#8884d8" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
           
@@ -527,6 +910,13 @@ const BenchmarkAnalyzer = () => {
                     <th>Min FPS</th>
                     <th>Max FPS</th>
                     <th>Frames &lt; 60 FPS</th>
+                    {sceneAverages.some(scene => scene.hasThreadData) && (
+                      <>
+                        <th>Game Thread (ms)</th>
+                        <th>Render Thread (ms)</th>
+                        <th>GPU Time (ms)</th>
+                      </>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -538,6 +928,13 @@ const BenchmarkAnalyzer = () => {
                       <td className="bad-fps">{scene.minFPS.toFixed(2)}</td>
                       <td className="good-fps">{scene.maxFPS.toFixed(2)}</td>
                       <td>{scene.below60.toFixed(1)}%</td>
+                      {scene.hasThreadData && (
+                        <>
+                          <td>{scene.gameThreadMean?.toFixed(2) || 'N/A'}</td>
+                          <td>{scene.renderThreadMean?.toFixed(2) || 'N/A'}</td>
+                          <td>{scene.gpuTimeMean?.toFixed(2) || 'N/A'}</td>
+                        </>
+                      )}
                     </tr>
                   ))}
                 </tbody>
