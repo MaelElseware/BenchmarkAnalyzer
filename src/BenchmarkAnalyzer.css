@@ -168,7 +168,7 @@ thead th {
 }
 
 .average-fps {
-  color: #4e5bf0;
+  color: #514ef0;
   font-weight: bold;
 }
 
@@ -185,16 +185,17 @@ thead th {
 .metrics-grid {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 40px;
   margin-bottom: 20px;
 }
 
 .metric-card {
   background-color: white;
-  padding: 15px;
+  padding: 0px;
   border-radius: 8px;
   box-shadow: 0 2px 5px rgba(0,0,0,0.1);
   width: 100%;
+  min-height: 400px;
 }
 
 .metric-title {
@@ -242,4 +243,37 @@ thead th {
   align-items: center;
   height: 300px;
   font-size: 18px;
+}
+
+/* Ensure chart containers have proper dimensions */
+.chart-container {
+  height: 400px !important;
+  width: 100% !important;
+  margin: 0px 0;
+  position: relative;
+  overflow: visible !important; /* Prevent clipping */
+  z-index: 1; /* Ensure charts are visible */
+}
+
+.metrics-grid .chart-container {
+  height: 300px !important;
+}
+
+/* Make sure parent containers don't restrict visibility */
+.section {
+  overflow: visible !important;
+  z-index: auto !important;
+}
+
+/* Ensure Recharts components are visible */
+.recharts-wrapper, 
+.recharts-surface {
+  overflow: visible !important;
+  z-index: 5 !important;
+}
+
+/* Fix responsive container */
+.recharts-responsive-container {
+  width: 100% !important;
+  height: 100% !important;
 }
