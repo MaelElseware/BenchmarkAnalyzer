@@ -659,7 +659,9 @@ const BenchmarkAnalyzer = () => {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" />
                     <YAxis />
-                    <Tooltip />
+                    <Tooltip 
+                          formatter={(value) => value.toFixed(2)} 
+                    />
                     <Legend wrapperStyle={{ position: 'relative', marginTop: '10px' }} />
                     <Bar dataKey="gameThread" name="Game Thread" fill="#8884d8" />
                     <Bar dataKey="renderThread" name="Render Thread" fill="#82ca9d" />
@@ -879,7 +881,7 @@ const BenchmarkAnalyzer = () => {
               <div className="summary-card">
                 <div className="summary-label">Stutter Events</div>
                 <div className="summary-value bad-fps">{stutters.length}</div>
-                <div className="summary-note">FPS drops below 10 FPS</div>
+                <div className="summary-note">FPS drops below 15 FPS</div>
               </div>
             </div>
           </div>
