@@ -5,6 +5,8 @@
 import React, { useState, useEffect } from "react";
 import './BenchmarkAnalyzer.css';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import ShareDialog from './components/ShareDialog';
+import { getBenchmarkData } from './services/firebase';
 
 const BenchmarkAnalyzer = () => {
   // State for application
@@ -16,7 +18,9 @@ const BenchmarkAnalyzer = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [fileName, setFileName] = useState('');
-  
+  const [isSharing, setIsSharing] = useState(false);
+  const [isLoadingShared, setIsLoadingShared] = useState(false);
+
   // Debug utility to log chart data
   const debugChartData = (data, name) => {
     console.log(`Chart data for ${name}:`, data);
@@ -229,25 +233,7 @@ const BenchmarkAnalyzer = () => {
     reader.onload = (e) => {
       try {
         const content = e.target.result;
-        const { benchmarks, stutters } = parseLogFile(content);
-        
-        if (benchmarks.length === 0) {
-          setError('No benchmark data found in the file. Make sure it has the correct format.');
-          setLoading(false);
-          return;
-        }
-        
-        const { evolution, averages } = processBenchmarkData(benchmarks);
-        setEvolutionData(evolution);
-        setSceneAverages(averages);
-        setStutters(stutters);
-        
-        // Set default selected scene
-        if (Object.keys(evolution).length > 0) {
-          setSelectedScene('all');
-        }
-        
-        setLoading(false);
+        processLogContent(content, file.name);
       } catch (err) {
         console.error('Error processing file:', err);
         setError('Error processing the file. Make sure it has the correct format.');
@@ -261,6 +247,83 @@ const BenchmarkAnalyzer = () => {
     reader.readAsText(file);
   };
   
+  const processLogContent = (content, fileName) => {
+    try {
+      const { benchmarks, stutters } = parseLogFile(content);
+      
+      if (benchmarks.length === 0) {
+        setError('No benchmark data found in the file. Make sure it has the correct format.');
+        setLoading(false);
+        return;
+      }
+      
+      const { evolution, averages } = processBenchmarkData(benchmarks);
+      setEvolutionData(evolution);
+      setSceneAverages(averages);
+      setStutters(stutters);
+      setFileName(fileName);
+      
+      // Set default selected scene
+      if (Object.keys(evolution).length > 0) {
+        setSelectedScene('all');
+      }
+      
+      setLoading(false);
+      setIsLoadingShared(false);
+    } catch (err) {
+      console.error('Error processing content:', err);
+      setError('Error processing the data. Make sure it has the correct format.');
+      setLoading(false);
+      setIsLoadingShared(false);
+    }
+  };
+  
+  // Handle loading shared benchmark from URL
+  const loadSharedBenchmark = async (benchmarkId) => {
+    setIsLoadingShared(true);
+    setError('');
+    
+    try {
+      const data = await getBenchmarkData(benchmarkId);
+      
+      if (data.rawLogContent) {
+        // Process the raw log content
+        processLogContent(data.rawLogContent, data.fileName || 'Shared Benchmark');
+      } else if (data.evolutionData && data.sceneAverages) {
+        // Directly use processed data if available
+        setEvolutionData(data.evolutionData);
+        setSceneAverages(data.sceneAverages);
+        setStutters(data.stutters || []);
+        setFileName(data.fileName || 'Shared Benchmark');
+        setSelectedScene('all');
+        setLoading(false);
+        setIsLoadingShared(false);
+      } else {
+        throw new Error('Invalid benchmark data format');
+      }
+    } catch (err) {
+      console.error('Error loading shared benchmark:', err);
+      setError(`Failed to load shared benchmark: ${err.message}`);
+      setIsLoadingShared(false);
+    }
+  };
+  
+  // Prepare data for sharing
+  const prepareBenchmarkDataForSharing = () => {
+    return {
+      evolutionData,
+      sceneAverages,
+      stutters,
+      fileName,
+      sharedAt: new Date().toISOString(),
+    };
+  };
+  
+  // Toggle share dialog
+  const toggleShareDialog = () => {
+    setIsSharing(!isSharing);
+  };
+
   // Sample data function for demonstration purposes
   const getSampleData = () => {
     // Sample evolution data structure
@@ -498,12 +561,20 @@ const BenchmarkAnalyzer = () => {
     
     // Load sample data on mount
     useEffect(() => {
-      // Load sample data for demonstration
-      const sampleData = getSampleData();
-      setEvolutionData(sampleData.evolution);
-      setSceneAverages(sampleData.averages);
-      setStutters(sampleData.stutters);
-      setFileName('Sample Data (Demo)');
+      const params = new URLSearchParams(window.location.search);
+      const benchmarkId = params.get('benchmark');
+      
+      if (benchmarkId) {
+        // Load the shared benchmark
+        loadSharedBenchmark(benchmarkId);
+      } else {
+        // Load sample data for demonstration if no benchmark is specified
+        const sampleData = getSampleData();
+        setEvolutionData(sampleData.evolution);
+        setSceneAverages(sampleData.averages);
+        setStutters(sampleData.stutters);
+        setFileName('Sample Data (Demo)');
+      }
     }, []);
 
     useEffect(() => {
@@ -519,13 +590,13 @@ const BenchmarkAnalyzer = () => {
     
     const evolutionChartData = prepareEvolutionChartData();
   
-  if (loading) {
-    return (
-      <div className="benchmark-container">
-        <div className="loading">Loading benchmark data...</div>
-      </div>
-    );
-  }
+    if (loading || isLoadingShared) {
+      return (
+        <div className="benchmark-container">
+          <div className="loading">Loading benchmark data...</div>
+        </div>
+      );
+    }
   
   return (
     <div className="benchmark-container">
@@ -535,7 +606,7 @@ const BenchmarkAnalyzer = () => {
       <div className="section">
         <h2 className="subtitle">Load Benchmark Data</h2>
         
-        <div className="upload-container">
+        <div className="controls-row">
           <div>
             <label className="upload-button">
               Upload Log File
@@ -550,6 +621,16 @@ const BenchmarkAnalyzer = () => {
               {fileName ? `Current file: ${fileName}` : 'No file selected'}
             </span>
           </div>
+
+          {/* Share Button */}
+          {Object.keys(evolutionData).length > 0 && (
+          <button 
+            className="share-button" 
+            onClick={toggleShareDialog}
+          >
+            Share Results
+          </button>
+          )}
         </div>
         
         {error && (
@@ -580,7 +661,7 @@ const BenchmarkAnalyzer = () => {
           <p>Please upload a benchmark log file to visualize performance data.</p>
         </div>
       )}
-      
+
       {/* Evolution Tab */}
       {activeTab === 'evolution' && Object.keys(evolutionData).length > 0 && (
         <div>
@@ -773,6 +854,14 @@ const BenchmarkAnalyzer = () => {
             </div>
           )}
           
+          {/* Share Dialog */}
+          {isSharing && (
+          <ShareDialog
+            benchmarkData={prepareBenchmarkDataForSharing()}
+            onClose={toggleShareDialog}
+          />
+          )}
+
           {/* Evolution Tables */}
           <div className="section">
             <h2 className="subtitle">Performance Metrics Across Runs</h2>

@@ -277,3 +277,91 @@ thead th {
   width: 100% !important;
   height: 100% !important;
 }
+
+/* Controls row for upload and share buttons */
+.controls-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+/* Upload container styling */
+.upload-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Share button styling */
+.share-button {
+  background-color: #c71840;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 10px 15px;
+  cursor: pointer;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.3s;
+}
+
+.share-button:hover {
+  background-color: #0b7dda;
+}
+
+/* Styling for the input file that's hidden */
+.hidden {
+  display: none;
+}
+
+/* File name display */
+.filename {
+  color: #666;
+  font-size: 0.9rem;
+  margin-left: 10px;
+}
+
+/* Error message styling */
+.error-message {
+  color: #f44336;
+  margin-top: 10px;
+  font-weight: 500;
+}
+
+/* Loading indicator */
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 200px;
+  font-size: 1.2rem;
+  color: #666;
+}
+
+/* Responsive adjustments for smaller screens */
+@media (max-width: 768px) {
+  .controls-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .upload-container {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .share-button {
+    width: 100%;
+  }
+  
+  .filename {
+    margin-left: 0;
+    margin-top: 5px;
+  }
+}
