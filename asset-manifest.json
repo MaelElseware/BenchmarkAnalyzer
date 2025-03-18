@@ -1,15 +1,17 @@
 {
   "files": {
-    "main.css": "/BenchmarkAnalyzer/static/css/main.f77e77a2.css",
-    "main.js": "/BenchmarkAnalyzer/static/js/main.a95c8af9.js",
-    "static/js/453.15943902.chunk.js": "/BenchmarkAnalyzer/static/js/453.15943902.chunk.js",
+    "main.css": "/BenchmarkAnalyzer/static/css/main.440aba17.chunk.css",
+    "main.js": "/BenchmarkAnalyzer/static/js/main.fad8f382.chunk.js",
+    "main.js.map": "/BenchmarkAnalyzer/static/js/main.fad8f382.chunk.js.map",
+    "runtime~main.js": "/BenchmarkAnalyzer/static/js/runtime~main.e9ab7939.js",
+    "runtime~main.js.map": "/BenchmarkAnalyzer/static/js/runtime~main.e9ab7939.js.map",
+    "static/js/2.d022ad79.chunk.js": "/BenchmarkAnalyzer/static/js/2.d022ad79.chunk.js",
+    "static/js/2.d022ad79.chunk.js.map": "/BenchmarkAnalyzer/static/js/2.d022ad79.chunk.js.map",
+    "static/js/3.19272ae3.chunk.js": "/BenchmarkAnalyzer/static/js/3.19272ae3.chunk.js",
+    "static/js/3.19272ae3.chunk.js.map": "/BenchmarkAnalyzer/static/js/3.19272ae3.chunk.js.map",
     "index.html": "/BenchmarkAnalyzer/index.html",
-    "main.f77e77a2.css.map": "/BenchmarkAnalyzer/static/css/main.f77e77a2.css.map",
-    "main.a95c8af9.js.map": "/BenchmarkAnalyzer/static/js/main.a95c8af9.js.map",
-    "453.15943902.chunk.js.map": "/BenchmarkAnalyzer/static/js/453.15943902.chunk.js.map"
-  },
-  "entrypoints": [
-    "static/css/main.f77e77a2.css",
-    "static/js/main.a95c8af9.js"
-  ]
+    "precache-manifest.adca5a89950cec02d7e5a39e179aed6c.js": "/BenchmarkAnalyzer/precache-manifest.adca5a89950cec02d7e5a39e179aed6c.js",
+    "service-worker.js": "/BenchmarkAnalyzer/service-worker.js",
+    "static/css/main.440aba17.chunk.css.map": "/BenchmarkAnalyzer/static/css/main.440aba17.chunk.css.map"
+  }
 }
