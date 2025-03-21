@@ -1,6 +1,7 @@
 // 1. use the cd
 // 2. npm run deploy to send to githubpage
 // 2.1 or npm start to go for a local serv version
+// 2.2 build as an electron app : npx electron-builder build
 
 import React, { useState, useEffect } from "react";
 import './BenchmarkAnalyzer.css';
@@ -278,6 +279,103 @@ const BenchmarkAnalyzer = () => {
     }
   };
   
+  // Function to download and process file from Google Drive 
+  // ?driveFile=1svUDM0W0A19Us7UwNtIhtrA_dhzp6M2d
+  // ?driveUrl=https://drive.google.com/file/d/1svUDM0W0A19Us7UwNtIhtrA_dhzp6M2d
+  // -> https://maelelseware.github.io/BenchmarkAnalyzer/?driveFile=1svUDM0W0A19Us7UwNtIhtrA_dhzp6M2d
+  const loadFromGoogleDrive = async (fileId) => {
+    setLoading(true);
+    setError('');
+    
+    try {
+      // Use your own proxy function
+      const proxyUrl = `/.netlify/functions/drive-proxy?id=${fileId}`;
+      
+      // Fetch the file
+      const response = await fetch(proxyUrl);
+      
+
+      if (!response.ok) {
+        throw new Error(`Failed to download file: ${response.status} ${response.statusText}`);
+      }
+      
+      const content = await response.text();
+      
+      // Debug: Log the first 500 characters to see what we're getting
+      console.log("Received content (first 500 chars):", content.substring(0, 500));
+      
+      // Check if it looks like HTML instead of a log file
+      if (content.includes('<html') || content.includes('<!DOCTYPE')) {
+        console.error("Received HTML instead of raw file content");
+        setError("Received HTML from Google Drive instead of the raw file. The file might need authentication or be too large.");
+        setLoading(false);
+        return;
+      }
+      
+      processLogContent(content, `Drive File ${fileId}`);
+    } catch (err) {
+      console.error('Error loading file from Drive:', err);
+      setError(`Error loading file: ${err.message}`);
+      setLoading(false);
+    }
+  };
+
+  const loadFromDropbox = async (dropboxUrl) => {
+    setLoading(true);
+    setError('');
+    
+    try {
+      // Convert to direct download link
+      const directDownloadUrl = dropboxUrl.replace('dl=0', 'dl=1');
+      
+      // Fetch the file
+      const response = await fetch(directDownloadUrl);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to download file: ${response.status} ${response.statusText}`);
+      }
+      
+      const content = await response.text();
+      
+      // Check if we got HTML instead of the file content
+      if (content.includes('<html') || content.includes('<!DOCTYPE')) {
+        console.error("Received HTML instead of raw file content");
+        setError("Received HTML from Dropbox instead of the raw file.");
+        setLoading(false);
+        return;
+      }
+      
+      // Get the filename from the URL
+      const urlObj = new URL(dropboxUrl);
+      const pathParts = urlObj.pathname.split('/');
+      const fileName = pathParts[pathParts.length - 1].split('?')[0];
+      
+      processLogContent(content, fileName);
+    } catch (err) {
+      console.error('Error loading file from Dropbox:', err);
+      setError(`Error loading file: ${err.message}`);
+      setLoading(false);
+    }
+  };
+
+  function extractGoogleDriveFileId(url) {
+    // Handle multiple Google Drive URL formats
+    const patterns = [
+      /\/file\/d\/([a-zA-Z0-9_-]+)/,       // /file/d/{fileId}/
+      /id=([a-zA-Z0-9_-]+)/,               // id={fileId}
+      /\/open\?id=([a-zA-Z0-9_-]+)/        // /open?id={fileId}
+    ];
+    
+    for (const pattern of patterns) {
+      const match = url.match(pattern);
+      if (match && match[1]) {
+        return match[1];
+      }
+    }
+    
+    return null;
+  }
+
   // Handle loading shared benchmark from URL
   const loadSharedBenchmark = async (benchmarkId) => {
     setIsLoadingShared(true);
@@ -558,23 +656,70 @@ const BenchmarkAnalyzer = () => {
         gpuTime: scene.gpuTimeMean || 0
       }));
     };
-    
+      
     // Load sample data on mount
     useEffect(() => {
       const params = new URLSearchParams(window.location.search);
       const benchmarkId = params.get('benchmark');
+     
+      // Check URL parameters on load
+      //const driveUrl = params.get('driveUrl');
+      //const driveFileId = params.get('driveFile') || 
+      //              (driveUrl ? extractGoogleDriveFileId(driveUrl) : null);
+      //const dropboxUrl = params.get('dropboxUrl');
       
-      if (benchmarkId) {
-        // Load the shared benchmark
-        loadSharedBenchmark(benchmarkId);
-      } else {
-        // Load sample data for demonstration if no benchmark is specified
-        const sampleData = getSampleData();
-        setEvolutionData(sampleData.evolution);
-        setSceneAverages(sampleData.averages);
-        setStutters(sampleData.stutters);
-        setFileName('Sample Data (Demo)');
+      const githubFile = params.get('githubFile');
+
+      // Check for Electron environment
+      if (window.electronAPI) {
+        // Listen for file open events from main process
+        window.electronAPI.onFileOpen((event, filePath) => {
+          const content = window.electronAPI.readFile(filePath);
+          
+          // Get filename without path
+          const filename = filePath.split(/[\\/]/).pop();
+          
+          // Process the file content
+          processLogContent(content, filename);
+        });
       }
+        
+      if (githubFile) {
+        setLoading(true);
+        
+        fetch(githubFile)
+          .then(response => {
+            if (!response.ok) {
+              throw new Error(`Failed to download file: ${response.status} ${response.statusText}`);
+            }
+            return response.text();
+          })
+          .then(content => {
+            // Get the filename from the URL
+            const urlParts = githubFile.split('/');
+            const fileName = urlParts[urlParts.length - 1];
+            
+            processLogContent(content, fileName);
+          })
+          .catch(err => {
+            console.error('Error loading file from GitHub:', err);
+            setError(`Error loading file: ${err.message}`);
+            setLoading(false);
+          });
+      } else {
+        if (benchmarkId) {
+          // Load the shared benchmark
+          loadSharedBenchmark(benchmarkId);
+        } else {
+          // Load sample data for demonstration if no benchmark is specified
+          const sampleData = getSampleData();
+          setEvolutionData(sampleData.evolution);
+          setSceneAverages(sampleData.averages);
+          setStutters(sampleData.stutters);
+          setFileName('Sample Data (Demo)');
+        }
+      }
+      
     }, []);
 
     useEffect(() => {
