@@ -25,3 +25,4 @@ src/services/firebase.js
 
 # Local Netlify folder
 .netlify
+/dist
